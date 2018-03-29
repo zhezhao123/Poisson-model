@@ -1,0 +1,143 @@
+---
+title: "HW4 MA576"
+output: pdf_document
+---
+
+```{r}
+##3
+#a
+discover <- discoveries
+time <- c(1860:1959)
+plot(discoveries)
+```
+
+It seems that the rate of discoveries was fluctuating up and down and reches the peak aroung 1885. During the recent years, the rate becomes slower.
+
+```{r}
+#b
+mod1 <- glm(discover~time, family = poisson, data = discover)
+mod2 <- update(mod1, .~. + I(time^2))
+mod3 <- update(mod2, .~. + I(time^3))
+mod4 <- update(mod3, .~. + I(time^4))
+mod5 <- update(mod4, .~. + I(time^5))
+AIClm <- function(l){
+  AIC <- extractAIC(l, k = 2)[2]
+  return(AIC)
+}
+matrix(unlist(lapply(list(mod1, mod2, mod3,mod4,mod5),AIClm)), byrow = TRUE, ncol = 1, dimnames = list(c("mod1", "mod2", "mod3","mod4", "mod5"), "AIC"))
+summary(mod2)
+```
+
+Mod2 has the smallest AIC, and order of 2 gives the most parsimonious description of the data
+When time is zero, the dicover is expected to be exp(-1.482e+03), very close to zero.
+As time increases by one year, discoveries will change to exp(-1.482e+03)*exp(1.561e+00)*exp(-4.106e-04), which is also a very small number and close to zero.
+
+```{r}
+#c
+pres <- residuals(mod2, type = "pearson")
+dres <- residuals(mod2, type = "deviance")
+par(mfrow = c(1,2))
+plot(time, pres)
+plot(time, dres)
+```
+```{r}
+dispersion <- sum((pres^2)/97) 
+dispersion
+with(mod2, cbind(res.deviance = deviance, df = df.residual,p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+anova(mod2, test = "Chisq")
+```
+
+residuals plots still presents curved pattern
+dispersion get from the Residual deviance over 97 df is 1.369485 and my estimate by pearson residuals is 1.305649. They are all very close to 1. However, the p-value of Chi-sq test is less than 0.05. The overdispersion might be dignificant.
+
+```{r}
+##4
+#a
+stc <- read.table("stretch.dat", header = T)
+attach(stc)
+library(dplyr)
+Stc <- stc %>%
+  group_by(Trial) %>%
+  summarise(num_trial = length(Trial))
+mag <- c(rep(5,20), rep(10,20), rep(15, 20))
+boxplot(Stc$num_trial~mag, data = stc, xlab = "stratch magnitude", ylab = "number of impulse")
+```
+```{r}
+secondinterval <- 1:60
+plot(Stc$num_trial[1:20], secondinterval[1:20], main = "magnitude 5mm", xlab = "second", ylab = "number of impulses")
+```
+```{r}
+plot(Stc$num_trial[21:40], secondinterval[21:40], main = "magnitude 10mm", xlab = "second", ylab = "number of impulses")
+```
+```{r}
+plot(Stc$num_trial[41:60], secondinterval[41:60], main = "magnitude 15mm", xlab = "second", ylab = "number of impulses")
+```
+```{r}
+#b
+m1 <- glm(Stc$num_trial~mag, family = poisson)
+mag_f <- factor(mag, ordered = F)
+m2 <- glm(Stc$num_trial~mag_f, family = poisson)
+summary(m1)
+summary(m2)
+anova(m1,m2, test = "Chisq")
+```
+
+For model of covariate, all parameters are significant at 95% level. Intercept means if magnitude is zero, the impulse number would be exp(1.50228) which is about 4. As magnitude increaes by one, impulse number would be increase to exp(1.50228) * exp(0.08149), which is about 5.
+
+For model of factors, all parameters are significant at 95% level. Intercept means if magnitude is 5mm, the impulse number would be exp(1.7492) which is about 6. As magnitude goes to 10mm level, impulse number would be exp(1.7492) * exp(0.74813), which is about 12. As magnitude goes to 15mm level, impulse number would be exp(1.7492) * exp(0.90756), which is about 14.
+
+The analysis of deviance table suggests that factors model is preferred even though both models' parameters are all significant at 95% level. For covariate model, the dispersion is about 67.589 /58 = 1.165328 and 55.684 / 57 = 0.9769123 for the factors model. The covariate model has slight overdispersion and the factor model has little underdispersion, but they are all very close to one. The following is the chi-sq test.Ttheir p-values are all larger than 0.05, the overdispersion and underdispersion might be not dignificant
+
+```{r}
+with(m1, cbind(res.deviance = deviance, df = df.residual, p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+with(m2, cbind(res.deviance = deviance, df = df.residual, p = pchisq(deviance, df.residual, lower.tail=TRUE)))
+```
+
+
+```{r}
+#c
+times <- (Trial + SpikeTimes - 1)
+mag_tt <- c(rep(5,20000), rep(10,20000), rep(15, 20000))
+spike1ms <- hist(times, breaks = seq(0,60,0.001))$counts
+bins <- hist(times, breaks = seq(0,60,0.001))$breaks[-1]
+history <- rep(bins[1:1000],60)
+m3 <- glm(spike1ms~mag_tt+history, poisson)
+summary(m3)
+```
+```{r}
+with(m3, cbind(res.deviance = deviance, df = df.residual, p = pchisq(deviance, df.residual, lower.tail=T)))
+anova(m3, test = "Chisq")
+(dp <-sum(residuals(m3,type="pearson")^2)/m3$df.res)
+summary (m3, dispersion=dp) # correct the test. overdispersion <- more likely reject the null.
+```
+
+Under 95% confidence level, the rate does not depends on time. Intercept means if magnitude and time is zero, the impulse number would be exp(-5.450402) which is close 0. As magnitude increaes by one, impulse number would be increase to exp(-5.450402) * exp(0.099332), which is still very close to zero. As times increaes by one, impulse number would be increase to exp(-5.450402) * exp(-0.004460), which is very close to zero.
+The underdispersion is significant.
+
+```{r}
+m4 <- glm(spike1ms[2:60000]~spike1ms[1:59999], poisson)
+m5 <- glm(spike1ms[3:60000]~spike1ms[2:59999] + spike1ms[1:59998], poisson)
+m6 <- glm(spike1ms[4:60000]~spike1ms[3:59999] + spike1ms[2:59998] + spike1ms[1:59997] , poisson)
+m7 <- glm(spike1ms[5:60000]~spike1ms[4:59999] + spike1ms[3:59998] + spike1ms[2:59997] + spike1ms[1:59996] , poisson)
+m8 <- glm(spike1ms[6:60000]~spike1ms[5:59999] + spike1ms[4:59998] + spike1ms[3:59997] + spike1ms[2:59996] + spike1ms[1:59995], poisson)
+AIClm <- function(l){
+  AIC <- extractAIC(l, k = 2)[2]
+  return(AIC)
+}
+matrix(unlist(lapply(list(m4, m5, m6,m7,m8),AIClm)), byrow = TRUE, ncol = 1, dimnames = list(c("m4", "m5", "m6","m7", "m8"), "AIC"))
+summary(m6)
+(dp2 <-sum(residuals(m6,type="pearson")^2)/m6$df.res)
+```
+```{r}
+summary(m6, dispersion = dp2)
+anova(m6, test = "Chisq")
+```
+
+The temporal dependencies exsists till lag of three. However, partial auto-correlation also exists with lag of 1 and of 2. The coefficients stand for partial auto-correlation between the impulse count(t) and impulse count(t+h). It suggests that the dispersion I get from previous parts are enlarged because covariance now taken into account.
+
+
+
+
+
+
+
